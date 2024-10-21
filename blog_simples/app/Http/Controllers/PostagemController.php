@@ -7,60 +7,103 @@ use Illuminate\Http\Request;
 
 class PostagemController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index()
     {
-        $postagens = Postagem::all();
+        $postagens = Postagem::with(['user', 'comentarios'])
+            ->latest()
+            ->paginate(10);
         return view('postagem.index', compact('postagens'));
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
-        //
+        return view('postagem.create');
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        //
+        $validated = $request->validate([
+            'titulo' => 'required|string|max:255',
+            'conteudo' => 'required|string',
+            'foto' => 'nullable|image|max:2048' // 2MB max
+        ]);
+
+        try {
+            if ($request->hasFile('foto')) {
+                $validated['foto'] = $request->file('foto')->store('postagens', 'public');
+            }
+
+            $postagem = auth()->user()->postagens()->create($validated);
+
+            return redirect()
+                ->route('postagens.show', $postagem)
+                ->with('success', 'Postagem criada com sucesso!');
+        } catch (\Exception $e) {
+            return back()
+                ->withInput()
+                ->with('error', 'Erro ao criar postagem.');
+        }
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show(Postagem $postagem)
     {
-        return view('postagens.show', compact('postagem'));
+        $postagem->load(['user', 'comentarios.user']);
+        return view('postagem.show', compact('postagem'));
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(Postagem $postagem)
     {
-        //
+        $this->authorize('update', $postagem);
+        return view('postagem.edit', compact('postagem'));
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, Postagem $postagem)
     {
-        //
+        $this->authorize('update', $postagem);
+
+        $validated = $request->validate([
+            'titulo' => 'required|string|max:255',
+            'conteudo' => 'required|string',
+            'foto' => 'nullable|image|max:2048'
+        ]);
+
+        try {
+            if ($request->hasFile('foto')) {
+                // Remove old photo if exists
+                if ($postagem->foto) {
+                    Storage::disk('public')->delete($postagem->foto);
+                }
+                $validated['foto'] = $request->file('foto')->store('postagens', 'public');
+            }
+
+            $postagem->update($validated);
+
+            return redirect()
+                ->route('postagens.show', $postagem)
+                ->with('success', 'Postagem atualizada com sucesso!');
+        } catch (\Exception $e) {
+            return back()
+                ->withInput()
+                ->with('error', 'Erro ao atualizar postagem.');
+        }
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(Postagem $postagem)
     {
-        //
+        $this->authorize('delete', $postagem);
+
+        try {
+            if ($postagem->foto) {
+                Storage::disk('public')->delete($postagem->foto);
+            }
+
+            $postagem->delete();
+
+            return redirect()
+                ->route('postagens.index')
+                ->with('success', 'Postagem excluída com sucesso!');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Erro ao excluir postagem.');
+        }
     }
 }

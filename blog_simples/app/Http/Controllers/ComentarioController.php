@@ -2,81 +2,69 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Controller;
 use App\Models\Comentario;
 use App\Models\Postagem;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
 
 class ComentarioController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
-    public function index()
+    public function store(Request $request, Postagem $postagem)
     {
-        //
+        $validated = $request->validate([
+            'conteudo' => 'required|string|max:255',
+            'postagem_id' => 'required|exists:postagens,id'
+        ]);
+
+        try {
+            $comentario = new Comentario([
+                'conteudo' => $validated['conteudo'],
+                'user_id' => auth()->id(),
+            ]);
+
+            $postagem->comentarios()->save($comentario);
+
+            return redirect()
+                ->route('postagens.show', $postagem)
+                ->with('success', 'Comentário criado com sucesso!');
+        } catch (\Exception $e) {
+            return back()
+                ->withInput()
+                ->with('error', 'Erro ao criar comentário. Tente novamente.');
+        }
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-        //
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(Comentario $comentario)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Comentario $comentario)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, Comentario $comentario)
     {
-        //
-    }
+        $this->authorize('update', $comentario);
 
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Comentario $comentario)
-    {
-        //
-    }
-
-    public function armazenar(Request $request, Postagem $postagem)
-    {
         $validated = $request->validate([
             'conteudo' => 'required|string|max:255',
         ]);
 
-        $comentario = new Comentario([
-            'conteudo' => $validated['conteudo'],
-        ]);
+        try {
+            $comentario->update($validated);
+            return redirect()
+                ->route('postagens.show', $comentario->postagem)
+                ->with('success', 'Comentário atualizado com sucesso!');
+        } catch (\Exception $e) {
+            return back()
+                ->withInput()
+                ->with('error', 'Erro ao atualizar comentário.');
+        }
+    }
 
-        $postagem->comentarios()->save($comentario);
+    public function destroy(Comentario $comentario)
+    {
+        $this->authorize('delete', $comentario);
 
-        return redirect()->route('postagens.show', $postagem);
+        try {
+            $comentario->delete();
+            return redirect()
+                ->route('postagens.show', $comentario->postagem)
+                ->with('success', 'Comentário excluído com sucesso!');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Erro ao excluir comentário.');
+        }
     }
 }
